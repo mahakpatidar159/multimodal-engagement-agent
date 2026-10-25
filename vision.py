@@ -1,11 +1,39 @@
 """Vision Module: face detection, ID tracking, sustained-presence attendance, attentiveness.
 Runs fully offline (OpenCV Haar cascades). No frames or face crops are ever stored."""
+import os
+
 import cv2
 import numpy as np
 import pandas as pd
 
-_FRONT = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
-_PROF = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_profileface.xml")
+_HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def _load_cascade(filename: str) -> "cv2.CascadeClassifier":
+    """Load a Haar cascade without assuming cv2.data exists (Streamlit Cloud, OpenCV builds).
+    Search order: 1) cascades/ folder shipped in the repo, 2) cv2.data.haarcascades,
+    3) <cv2 package dir>/data, 4) next to vision.py."""
+    candidates = [os.path.join(_HERE, "cascades", filename)]
+    data = getattr(cv2, "data", None)
+    if data is not None and getattr(data, "haarcascades", None):
+        candidates.append(os.path.join(data.haarcascades, filename))
+    cv2_dir = os.path.dirname(getattr(cv2, "__file__", "") or "")
+    if cv2_dir:
+        candidates.append(os.path.join(cv2_dir, "data", filename))
+    candidates.append(os.path.join(_HERE, filename))
+    for path in candidates:
+        if os.path.isfile(path):
+            clf = cv2.CascadeClassifier(path)
+            if not clf.empty():
+                return clf
+    raise RuntimeError(
+        f"Could not load Haar cascade '{filename}'. Add it to a 'cascades/' folder next to vision.py. "
+        f"Searched: {candidates}"
+    )
+
+
+_FRONT = _load_cascade("haarcascade_frontalface_default.xml")
+_PROF = _load_cascade("haarcascade_profileface.xml")
 
 
 def fmt_time(s: float) -> str:
